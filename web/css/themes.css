@@ -1,0 +1,100 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   主题变量 - 深色 / 浅色 / 自定义
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ─── 深色主题（默认）────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --accent:              #4a9eff;
+  --accent-rgb:          74, 158, 255;
+  --accent-hover:        #6ab0ff;
+  --accent-active:       #2a7edf;
+  --accent-glow:         rgba(74, 158, 255, 0.35);
+
+  --bg-window:           rgb(12, 12, 18);
+  --bg-toolbar:          rgba(18, 18, 28, 0.75);
+  --bg-card:             rgba(255, 255, 255, 0.05);
+  --bg-card-hover:       rgba(255, 255, 255, 0.10);
+  --bg-card-selected:    rgba(74, 158, 255, 0.18);
+  --bg-input:            rgba(255, 255, 255, 0.07);
+  --bg-input-focus:      rgba(255, 255, 255, 0.10);
+  --bg-overlay:          rgba(0, 0, 0, 0.55);
+  --bg-dialog:           rgba(22, 22, 34, 0.96);
+  --bg-tooltip:          rgba(30, 30, 46, 0.97);
+  --bg-scrollbar:        rgba(255, 255, 255, 0.08);
+  --bg-scrollbar-thumb:  rgba(255, 255, 255, 0.22);
+  --bg-context:          rgba(22, 22, 34, 0.97);
+
+  --text-primary:        rgba(255, 255, 255, 0.92);
+  --text-secondary:      rgba(255, 255, 255, 0.60);
+  --text-tertiary:       rgba(255, 255, 255, 0.38);
+  --text-placeholder:    rgba(255, 255, 255, 0.30);
+  --text-accent:         #4a9eff;
+  --text-danger:         #ff6b6b;
+  --text-success:        #51cf66;
+
+  --border-subtle:       rgba(255, 255, 255, 0.08);
+  --border-normal:       rgba(255, 255, 255, 0.14);
+  --border-strong:       rgba(255, 255, 255, 0.24);
+  --border-accent:       rgba(74, 158, 255, 0.45);
+
+  --shadow-sm:           0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md:           0 4px 20px rgba(0, 0, 0, 0.45);
+  --shadow-lg:           0 8px 40px rgba(0, 0, 0, 0.55);
+  --shadow-accent:       0 4px 20px rgba(74, 158, 255, 0.30);
+
+  --blur-bg:             0px;
+  --radius-sm:           6px;
+  --radius-md:           10px;
+  --radius-lg:           14px;
+  --radius-xl:           18px;
+  --radius-pill:         999px;
+
+  --transition-fast:     150ms ease;
+  --transition-normal:   220ms ease;
+  --transition-slow:     350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── 浅色主题 ────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --accent:              #1a73e8;
+  --accent-rgb:          26, 115, 232;
+  --accent-hover:        #2a83f8;
+  --accent-active:       #0a53c8;
+  --accent-glow:         rgba(26, 115, 232, 0.25);
+
+  --bg-window:           rgb(240, 242, 248);
+  --bg-toolbar:          rgba(230, 234, 244, 0.80);
+  --bg-card:             rgba(255, 255, 255, 0.82);
+  --bg-card-hover:       rgba(255, 255, 255, 0.96);
+  --bg-card-selected:    rgba(26, 115, 232, 0.12);
+  --bg-input:            rgba(0, 0, 0, 0.05);
+  --bg-input-focus:      rgba(0, 0, 0, 0.08);
+  --bg-overlay:          rgba(0, 0, 0, 0.30);
+  --bg-dialog:           rgba(245, 247, 252, 0.98);
+  --bg-tooltip:          rgba(40, 44, 60, 0.97);
+  --bg-scrollbar:        rgba(0, 0, 0, 0.06);
+  --bg-scrollbar-thumb:  rgba(0, 0, 0, 0.18);
+  --bg-context:          rgba(245, 247, 252, 0.98);
+
+  --text-primary:        rgba(15, 18, 30, 0.90);
+  --text-secondary:      rgba(15, 18, 30, 0.60);
+  --text-tertiary:       rgba(15, 18, 30, 0.38);
+  --text-placeholder:    rgba(15, 18, 30, 0.30);
+  --text-accent:         #1a73e8;
+  --text-danger:         #d32f2f;
+  --text-success:        #2e7d32;
+
+  --border-subtle:       rgba(0, 0, 0, 0.10);
+  --border-normal:       rgba(0, 0, 0, 0.20);
+  --border-strong:       rgba(0, 0, 0, 0.28);
+  --border-accent:       rgba(26, 115, 232, 0.45);
+
+  --shadow-sm:           0 2px 8px rgba(0, 0, 0, 0.10);
+  --shadow-md:           0 4px 20px rgba(0, 0, 0, 0.14);
+  --shadow-lg:           0 8px 40px rgba(0, 0, 0, 0.18);
+  --shadow-accent:       0 4px 20px rgba(26, 115, 232, 0.22);
+
+  --bg-scrollbar:        rgba(0, 0, 0, 0.05);
+  --bg-scrollbar-thumb:  rgba(0, 0, 0, 0.18);
+}

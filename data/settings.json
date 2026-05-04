@@ -1,0 +1,17 @@
+{
+  "theme": "dark",
+  "always_on_top": false,
+  "view_mode": "grid",
+  "sort_by": "manual",
+  "window_x": 158,
+  "window_y": 230,
+  "window_width": 1200,
+  "window_height": 800,
+  "categories": [
+    "全部"
+  ],
+  "accent_color": "#ffd43b",
+  "background_image": null,
+  "blur_intensity": 60,
+  "transparency": 1
+}
