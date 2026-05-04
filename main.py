@@ -14,6 +14,14 @@ _filtered = [p for p in _path_parts
              and 'Library/bin' not in p]
 os.environ['PATH'] = ';'.join(_filtered)
 os.add_dll_directory('C:\\Windows\\System32')
+
+# 打包后某些机器上 QtWebEngine 可能因沙箱或 GPU 驱动问题出现白屏
+if getattr(sys, 'frozen', False):
+    os.environ.setdefault('QTWEBENGINE_DISABLE_SANDBOX', '1')
+    os.environ.setdefault('QT_OPENGL', 'software')
+    _flags = os.environ.get('QTWEBENGINE_CHROMIUM_FLAGS', '').strip()
+    _extra = '--disable-gpu --no-sandbox'
+    os.environ['QTWEBENGINE_CHROMIUM_FLAGS'] = f'{_flags} {_extra}'.strip()
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Qt 6 会自动设置 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2，无需手动调用
@@ -28,7 +36,25 @@ from pathlib import Path
 from app.window import MainWindow
 
 
+def _resolve_resource(relative_path: str) -> Path:
+    candidates: list[Path] = []
+    if hasattr(sys, '_MEIPASS'):
+        candidates.append(Path(sys._MEIPASS) / relative_path)
+    if getattr(sys, 'frozen', False):
+        candidates.append(Path(sys.executable).resolve().parent / relative_path)
+    candidates.append(Path(__file__).parent / relative_path)
+
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
 def main():
+    # 必须在 QApplication 之前设置
+    if getattr(sys, 'frozen', False):
+        QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL, True)
+
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
 
     app = QApplication(sys.argv)
@@ -37,7 +63,7 @@ def main():
     app.setStyle('Fusion')
 
     # 设置任务栏 & 窗口图标
-    _icon_path = Path(__file__).parent / '图标.ico'
+    _icon_path = _resolve_resource('OYAToolBoxICO.ico')
     if _icon_path.exists():
         app.setWindowIcon(QIcon(str(_icon_path)))
 

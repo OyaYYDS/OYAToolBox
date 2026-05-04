@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Installer/build outputs
+*.exe
+*.msi
+
+# Logs and runtime diagnostics
+*.log
+crash_stderr.txt
+test_stderr.txt
+runtime_webview.log
+
+# IDE/editor
+.vscode/
+.idea/

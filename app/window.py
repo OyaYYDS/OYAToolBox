@@ -2,6 +2,7 @@
 import ctypes
 import ctypes.wintypes
 import os
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
@@ -14,6 +15,43 @@ from PySide6.QtCore import QUrl
 
 from .bridge import Bridge
 from .data_manager import DataManager
+
+def get_resource_path(relative_path: str) -> Path:
+    candidates: list[Path] = []
+
+    # PyInstaller 解包目录（onefile/onefolder）
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(Path(sys._MEIPASS) / relative_path)
+
+    # exe 同目录（便于外置资源部署）
+    if getattr(sys, 'frozen', False):
+        candidates.append(Path(sys.executable).resolve().parent / relative_path)
+
+    # 源码运行目录
+    candidates.append(Path(__file__).parent.parent / relative_path)
+
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
+def get_runtime_log_path() -> Path:
+    if getattr(sys, 'frozen', False):
+        base = Path(sys.executable).resolve().parent
+    else:
+        base = Path(__file__).parent.parent
+    return base / 'runtime_webview.log'
+
+
+def append_runtime_log(message: str):
+    try:
+        log_file = get_runtime_log_path()
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with log_file.open('a', encoding='utf-8') as f:
+            f.write(message + '\n')
+    except Exception:
+        pass
 
 
 # ─── Windows DWM 常量 ─────────────────────────────────────────────────────────
@@ -86,6 +124,14 @@ class DroppableWebView(QWebEngineView):
             super().dropEvent(event)
 
 
+class AppWebPage(QWebEnginePage):
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
+        log = f'[JS][{level.name}] {sourceID}:{lineNumber} {message}'
+        print(log)
+        append_runtime_log(log)
+        super().javaScriptConsoleMessage(level, message, lineNumber, sourceID)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -100,7 +146,7 @@ class MainWindow(QMainWindow):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
         # 窗口图标
-        _icon_path = Path(__file__).parent.parent / '图标.ico'
+        _icon_path = get_resource_path("OYAToolBoxICO.ico")
         if _icon_path.exists():
             self.setWindowIcon(QIcon(str(_icon_path)))
 
@@ -139,6 +185,7 @@ class MainWindow(QMainWindow):
         # WebEngine 视图
         self._web_view = DroppableWebView(self)
         self._web_view.setStyleSheet('background: transparent;')
+        self._web_view.setPage(AppWebPage(self._web_view))
         layout.addWidget(self._web_view)
 
         # QWebChannel
@@ -150,6 +197,8 @@ class MainWindow(QMainWindow):
         page = self._web_view.page()
         page.setWebChannel(self._channel)
         page.setBackgroundColor(QColor(Qt.GlobalColor.transparent))
+        self._web_view.loadFinished.connect(self._on_page_load_finished)
+        page.renderProcessTerminated.connect(self._on_render_process_terminated)
 
         # 启用必要的 WebEngine 功能
         settings = page.settings()
@@ -168,8 +217,39 @@ class MainWindow(QMainWindow):
         self._bridge.windowAlwaysOnTopRequest.connect(self._set_always_on_top)
 
         # 加载主页面
-        html_path = Path(__file__).parent.parent / 'web' / 'index.html'
-        self._web_view.load(QUrl.fromLocalFile(str(html_path)))
+        html_path = get_resource_path("web/index.html")
+        if html_path.exists():
+            self._web_view.load(QUrl.fromLocalFile(str(html_path)))
+        else:
+            self._show_load_error(f'页面文件不存在: {html_path}')
+
+    def _on_page_load_finished(self, ok: bool):
+        if ok:
+            append_runtime_log('[WEB] 页面加载成功')
+            return
+        html_path = get_resource_path("web/index.html")
+        self._show_load_error(f'页面加载失败: {html_path}')
+
+    def _on_render_process_terminated(self, termination_status, exit_code: int):
+        status = getattr(termination_status, 'name', str(termination_status))
+        message = f'WebEngine 渲染进程已终止: status={status}, exit_code={exit_code}'
+        append_runtime_log(f'[WEB] {message}')
+        self._show_load_error(message)
+
+    def _show_load_error(self, message: str):
+        print(f'[WEB] {message}')
+        append_runtime_log(f'[WEB] {message}')
+        log_path = get_runtime_log_path()
+        self._web_view.setHtml(
+            f'''<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>加载失败</title></head>
+<body style="font-family:'Microsoft YaHei UI','Segoe UI',sans-serif;background:#0f1117;color:#e6e6e6;padding:24px;">
+  <h2 style="margin:0 0 12px;">页面加载失败</h2>
+  <div style="line-height:1.7;opacity:.9;">{message}</div>
+  <div style="margin-top:16px;font-size:12px;opacity:.7;">请确认打包时已包含 web/ 与 data/ 目录。</div>
+    <div style="margin-top:8px;font-size:12px;opacity:.7;">调试日志: {log_path}</div>
+</body></html>'''
+        )
 
     # ─── 窗口效果 ─────────────────────────────────────────────────────────────
 
