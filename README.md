@@ -1,20 +1,32 @@
 # 工具箱启动器
 
-一个基于 PySide6 + QWebEngine 的 Windows 桌面工具箱启动器，支持工具管理、分类筛选、双视图显示与基础主题切换。
+一个基于 **PySide6 + QWebEngine** 的 Windows 桌面工具箱启动器，支持多种工具类型管理、主题切换与分类管理。
 
 ---
 
 ## 功能特性
 
-- 双视图模式：网格视图 / 卡片视图
-- 工具管理：添加、编辑、删除、拖拽排序
-- 支持类型：exe、bat、cmd、ps1、lnk、folder、url、file
-- 图标来源：自动提取 exe 图标 / 自定义图片 / 文字图标
-- 分类管理：自定义分类、快速筛选
-- 右键菜单：启动、编辑、删除、打开所在位置、复制路径
-- 外观设置：深色、浅色、跟随系统
-- 窗口功能：始终置顶、窗口位置与尺寸记忆
-- 统一应用图标：使用项目根目录 OYAToolBoxICO.ico（任务栏、窗口、标题栏）
+- **双视图模式**：网格视图（紧凑图标）/ 卡片视图（详细列表）
+- **工具管理**：添加、编辑、删除工具；支持拖拽排序
+- **多种工具类型**：
+  - 可执行程序（`.exe`）
+  - 脚本（`.bat` / `.cmd` / `.ps1`）
+  - 快捷方式（`.lnk`）
+  - 文件夹（直接打开）
+  - 网页链接（URL）
+  - 其他文件（按系统默认方式打开）
+- **图标来源**：
+  - 自动从 `.exe` 提取图标
+  - 自定义图片（PNG / JPG 等）
+  - 文字 / Emoji + 自定义背景色
+- **分类管理**：自定义分类标签，快速筛选工具
+- **悬浮卡片**：鼠标悬停工具时展示名称、类型、路径等详情
+- **右键菜单**：快速启动、打开文件位置、编辑、删除
+- **外观设置**：
+  - 主题模式：深色 / 浅色 / 跟随系统
+  - 窗口始终置顶
+- **应用图标统一**：使用项目根目录 `图标.ico` 作为任务栏图标、窗口图标和窗口标题栏左上角图标
+- **窗口记忆**：自动保存位置、大小，下次启动恢复
 
 ---
 
@@ -23,50 +35,56 @@
 | 组件 | 版本要求 |
 |---|---|
 | Python | 3.10+ |
-| PySide6 | >= 6.6.0 |
-| qasync | >= 0.27.0 |
-| Pillow | >= 10.0.0 |
-| pywin32 | >= 306 |
-| pywin32-ctypes | >= 0.2.2 |
+| PySide6 | ≥ 6.6.0 |
+| qasync | ≥ 0.27.0 |
+| Pillow | ≥ 10.0.0 |
+| pywin32 | ≥ 306 |
+| pywin32-ctypes | ≥ 0.2.2 |
 
-前端为原生 HTML/CSS/JavaScript，通过 QWebChannel 与 Python 后端通信。
+前端使用纯 HTML/CSS/JavaScript，通过 **QWebChannel** 实现 Python ↔ JavaScript 双向通信。
 
 ---
 
 ## 项目结构
 
-```text
+```
 工具箱启动器2/
-├── main.py               # 启动入口（含 Conda PATH 兼容与 WebEngine 启动参数）
-├── requirements.txt      # 依赖列表
-├── install.bat           # 安装依赖脚本
-├── build_exe.bat         # PyInstaller 打包脚本
-├── OYAToolBox.spec       # PyInstaller 规格文件
-├── OYAToolBox.iss        # Inno Setup 安装包脚本
-├── OYAToolBoxICO.ico     # 应用图标
+├── main.py                  # 入口，启动 Qt 事件循环（含 Conda PATH 修复）
+├── requirements.txt         # Python 依赖列表
+├── install.bat              # 一键安装依赖脚本
+├── 图标.ico                  # 应用图标
 ├── app/
-│   ├── bridge.py
-│   ├── data_manager.py
-│   ├── icon_extractor.py
-│   ├── tool_launcher.py
-│   └── window.py
+│   ├── bridge.py            # QWebChannel 桥接层（Python ↔ JS）
+│   ├── data_manager.py      # 工具数据 & 设置的读写管理
+│   ├── icon_extractor.py    # 从 exe 提取图标并转为 Base64
+│   ├── tool_launcher.py     # 启动工具、打开文件位置
+│   └── window.py            # 主窗口（QMainWindow + QWebEngineView）
 ├── web/
-│   ├── index.html
+│   ├── index.html           # 主页面
 │   ├── css/
+│   │   ├── themes.css       # 深色 / 浅色主题 CSS 变量
+│   │   └── main.css         # 全局组件样式
 │   └── js/
-├── data/
-│   ├── tools.json
-│   └── settings.json
-└── .gitignore
+│       ├── app.js           # 应用主控制器
+│       ├── settings_panel.js # 设置面板逻辑
+│       ├── grid_view.js     # 网格视图渲染
+│       ├── card_view.js     # 卡片视图渲染
+│       ├── hover_card.js    # 悬浮卡片组件
+│       ├── add_dialog.js    # 添加 / 编辑工具弹窗
+│       ├── context_menu.js  # 右键菜单
+│       └── drag_handler.js  # 窗口拖拽 & 工具排序
+└── data/
+    ├── tools.json           # 工具列表持久化数据
+    └── settings.json        # 用户设置持久化数据
 ```
 
 ---
 
-## 开发运行
+## 安装与运行
 
-### 方式一：脚本安装
+### 方式一：一键安装（推荐）
 
-双击执行 install.bat，之后运行：
+双击运行 `install.bat`，自动安装所有依赖，然后运行：
 
 ```bash
 python main.py
@@ -79,54 +97,29 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Conda 用户说明：main.py 已包含 PATH 清理逻辑，用于规避 Conda Library/bin 与 PySide6 的 DLL 冲突。
+> **Conda 用户注意**：`main.py` 已内置 PATH 清理逻辑，会自动过滤 Conda `Library\bin` 中与 PySide6 冲突的 DLL，无需手动处理。
 
 ---
 
-## 打包发布
+## 数据文件说明
 
-### 1) 生成可执行目录（PyInstaller）
+- **`data/tools.json`**：存储所有工具的配置（名称、路径、类型、图标、分类、排序等）
+- **`data/settings.json`**：存储用户偏好（主题、视图模式、排序、置顶状态、窗口位置与大小、分类等）
 
-推荐直接执行：
-
-```bat
-build_exe.bat
-```
-
-产物目录：dist/OYAToolBox/
-
-### 2) 生成安装包（Inno Setup 6）
-
-- 打开 OYAToolBox.iss
-- 在 Inno Setup 6 中编译
-- 输出安装包位于 dist/ 目录
-
----
-
-## 数据文件
-
-- data/tools.json：工具数据（名称、路径、类型、图标、分类、排序等）
-- data/settings.json：用户偏好（主题、视图、排序、置顶、窗口位置尺寸、分类等）
-
-程序会自动维护这两个文件，通常不需要手动编辑。
+这两个文件由程序自动维护，一般无需手动编辑。
 
 ---
 
 ## 常见问题
 
-### Q1：启动时报 DLL 错误或白屏
+**Q：程序启动时崩溃或报 DLL 错误？**  
+A：通常是 Conda 环境中 `Library\bin` 的 OpenSSL / Qt DLL 与 PySide6 冲突。本项目已在 `main.py` 中自动处理，如仍有问题，请确认使用的是 Python 3.10 及以上版本。
 
-- 优先确认 Python 版本为 3.10+
-- 通过 main.py 启动以应用 PATH 修复逻辑
-- 使用 build_exe.bat 重新打包，避免参数不一致
+**Q：图标无法显示？**  
+A：确认 `pywin32` 已正确安装。对于非标准路径或 UNC 路径，图标提取可能不支持，程序会自动回退到默认图标。
 
-### Q2：为什么打包后有 _internal 文件夹
-
-这是 PyInstaller onedir 模式的正常结构，依赖与运行资源都在该目录中，不建议手动删除。
-
-### Q3：为什么设置里没有背景透明度/模糊/背景图片
-
-这些功能已在当前版本移除，外观设置仅保留主题相关选项。
+**Q：为什么设置里没有背景透明度/模糊/背景图片选项？**  
+A：这些功能已在当前版本中移除，外观设置仅保留主题切换与窗口始终置顶。
 
 ---
 

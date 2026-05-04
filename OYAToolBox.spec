@@ -28,7 +28,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='宸ュ叿绠卞惎鍔ㄥ櫒',
+    name='OYAToolBox',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -48,5 +48,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='宸ュ叿绠卞惎鍔ㄥ櫒',
+    name='OYAToolBox',
 )
