@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 构建产物
+build/
+dist/
+
+# 运行时数据（用户数据, 不应入库）
+data/*.json
+runtime_webview.log
+
+# IDE
+.idea/
+.vscode/

@@ -15,7 +15,7 @@
   <!-- ═══ 标题栏 ═══════════════════════════════════════════════════════════ -->
   <div id="titlebar">
     <div id="titlebar-logo">
-      <img class="logo-icon" src="../OYAToolBoxICO.ico" alt="应用图标">
+      <img class="logo-icon" src="img/logo.png" alt="应用图标">
       <span class="logo-text">OYA的工具箱</span>
     </div>
     <div id="titlebar-drag"></div>
@@ -51,10 +51,17 @@
     <button class="tb-icon-btn active" id="btn-view-grid" title="网格视图">⊞</button>
     <button class="tb-icon-btn"        id="btn-view-card" title="列表视图">☰</button>
 
+    <div class="tb-separator" id="sep-grid-size"></div>
+    <div class="tb-seg" id="grid-size-switch" title="网格图标大小">
+      <button class="tb-seg-btn" id="btn-grid-small">小</button>
+      <button class="tb-seg-btn active" id="btn-grid-medium">中</button>
+      <button class="tb-seg-btn" id="btn-grid-large">大</button>
+    </div>
+
     <div style="flex:1"></div>
 
     <!-- 添加按钮 -->
-    <button id="btn-add">＋ 添加工具</button>
+    <button id="btn-add">＋ 添加软件</button>
   </div>
 
   <!-- ═══ 分类标签栏 ════════════════════════════════════════════════════════ -->
@@ -71,8 +78,12 @@
     <!-- Card 视图 -->
     <div id="card-view" style="display:none">
       <div id="card-list"></div>
-      <div id="card-detail" class="empty">
-        <div class="empty-hint">← 选择左侧工具查看详情<br>双击可直接启动</div>
+      <div id="card-splitter" title="拖拽调整左右宽度"></div>
+      <div id="card-detail-wrap">
+        <button id="btn-card-detail-toggle" title="隐藏/显示详情">隐藏详情</button>
+        <div id="card-detail" class="empty">
+          <div class="empty-hint">← 选择左侧工具查看详情<br>双击可直接启动</div>
+        </div>
       </div>
     </div>
 
@@ -157,7 +168,7 @@
             <div id="icon-image-group" style="display:none;margin-top:8px">
               <button class="btn secondary" id="btn-browse-icon" style="height:28px;font-size:12px">选择图片…</button>
             </div>
-            <div id="icon-text-group" style="display:none;margin-top:8px;display:flex;gap:8px;align-items:center">
+            <div id="icon-text-group" style="display:none;margin-top:8px;gap:8px;align-items:center">
               <input type="text" class="form-input" id="icon-text-val" placeholder="文字(最多2个)" maxlength="2" style="width:70px">
               <input type="color" id="icon-color-val" value="#4a9eff" style="width:36px;height:28px;border:none;background:none;cursor:pointer;padding:2px">
             </div>
@@ -259,7 +270,6 @@
 <div id="toast-container"></div>
 
 <!-- ═══ 脚本 ════════════════════════════════════════════════════════════════ -->
-<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 <script src="js/bridge.js"></script>
 <script src="js/hover_card.js"></script>
 <script src="js/drag_handler.js"></script>
@@ -268,12 +278,6 @@
 <script src="js/grid_view.js"></script>
 <script src="js/card_view.js"></script>
 <script src="js/app.js"></script>
-
-<script>
-// 填充分类下拉（从 DOM 中读取 category-bar 数据后由 app.js 动态更新）
-// 此处在 app.js 加载后才会获取 categories，先用静态选项
-// 当 settings 加载后，app.js 会更新分类下拉的 options
-</script>
 
 </body>
 </html>

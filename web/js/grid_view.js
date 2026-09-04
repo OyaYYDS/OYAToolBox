@@ -10,6 +10,8 @@ const GridView = (() => {
   let onLaunch = null;
   let onContextMenu = null;
   let onReorder = null;
+  let iconSize = 48;
+  let sizeMode = 'medium';
 
   // ─── 初始化 ─────────────────────────────────────────────────────────────
 
@@ -32,14 +34,15 @@ const GridView = (() => {
     if (tools.length === 0) {
       container.innerHTML = `
         <div class="empty-state" style="width:100%;justify-content:center">
-          <div class="empty-icon">🧰</div>
-          <div class="empty-title">还没有工具</div>
-          <div class="empty-hint">点击"添加工具"或<br>将文件拖到此处开始使用</div>
+          <div class="empty-icon"><img src="img/logo.png" alt="应用图标" draggable="false" style="width:100px;height:100px;object-fit:contain;opacity:.6"></div>
+          <div class="empty-title">还没有软件</div>
+          <div class="empty-hint">点击"添加软件"或<br>将文件拖到此处开始使用</div>
         </div>`;
       return;
     }
 
     container.innerHTML = '';
+    _applySizeClass();
     tools.forEach(tool => {
       container.appendChild(_buildItem(tool));
     });
@@ -50,12 +53,12 @@ const GridView = (() => {
 
   function _buildItem(tool) {
     const div = document.createElement('div');
-    div.className = 'tool-item anim-fade-in';
+    div.className = 'tool-item';
     div.dataset.id = tool.id;
     if (tool.id === selectedId) div.classList.add('selected');
 
     div.innerHTML = `
-      <div class="item-icon">${_iconHtml(tool, 48)}</div>
+      <div class="item-icon">${_iconHtml(tool, iconSize)}</div>
       <div class="item-name" title="${_esc(tool.name)}">${_esc(tool.name)}</div>
     `;
     return div;
@@ -99,8 +102,11 @@ const GridView = (() => {
       const item = e.target.closest('.tool-item');
       if (!item) return;
       const id = item.dataset.id;
+      const tool = tools.find(t => t.id === id);
       _select(id);
       HoverCard.cancelShow();
+      HoverCard.cancelHide();
+      if (tool) HoverCard.show(tool, e.clientX, e.clientY);
       HoverCard.lock(id);
       if (onContextMenu) onContextMenu(id, e.clientX, e.clientY);
     });
@@ -114,7 +120,7 @@ const GridView = (() => {
       const tool = tools.find(t => t.id === id);
       if (!tool) return;
       const rect = item.getBoundingClientRect();
-      HoverCard.scheduleShow(tool, rect.right, rect.top, 500);
+      HoverCard.scheduleShow(tool, rect.right, rect.top, 0);
     });
 
     container.addEventListener('mouseout', (e) => {
@@ -143,8 +149,15 @@ const GridView = (() => {
     if (!tool) return;
     tool.icon_data = iconData;
 
-    iconEl.innerHTML = _iconHtml(tool, 48);
+    iconEl.innerHTML = _iconHtml(tool, iconSize);
     HoverCard.updateIconForTool(toolId, iconData);
+  }
+
+  function setIconSize(mode) {
+    const map = { small: 40, medium: 48, large: 64 };
+    sizeMode = map[mode] ? mode : 'medium';
+    iconSize = map[sizeMode];
+    _applySizeClass();
   }
 
   function updateTool(tool) {
@@ -182,10 +195,10 @@ const GridView = (() => {
 
   function _iconHtml(tool, size) {
     if (tool.icon_data && tool.icon_mode !== 'text') {
-      const src = tool.icon_data.startsWith('svg:')
-        ? 'data:image/svg+xml;base64,' + tool.icon_data.slice(4)
-        : 'data:image/png;base64,' + tool.icon_data;
-      return `<img src="${src}" width="${size}" height="${size}" draggable="false" style="border-radius:6px;object-fit:contain;pointer-events:none" alt="">`;
+      const src = window.iconDataToSrc(tool.icon_data);
+      if (src) {
+        return `<img src="${src}" width="${size}" height="${size}" draggable="false" style="border-radius:6px;object-fit:contain;pointer-events:none" alt="">`;
+      }
     }
     const abbr  = (tool.icon_text  || tool.name?.substring(0,2) || '?').substring(0,2).toUpperCase();
     const color = tool.icon_color || '#4a9eff';
@@ -197,5 +210,11 @@ const GridView = (() => {
     return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  return { init, render, select, getSelected, updateIcon, updateTool, removeTool };
+  function _applySizeClass() {
+    if (!container) return;
+    container.classList.remove('size-small', 'size-medium', 'size-large');
+    container.classList.add('size-' + sizeMode);
+  }
+
+  return { init, render, select, getSelected, updateIcon, updateTool, removeTool, setIconSize };
 })();

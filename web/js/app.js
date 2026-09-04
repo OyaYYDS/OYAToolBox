@@ -15,6 +15,10 @@
   let searchText  = '';
   let categories  = [];
   let contextMenuOpen = false;
+  let gridIconSize = 'medium';
+  let cardDetailHidden = false;
+  let cardListWidth = 340;
+  let searchDebounceTimer = null;
 
   // ─── 初始化 ────────────────────────────────────────────────────────────────
 
@@ -39,6 +43,9 @@
     categories = _parse(catsStr)    || ['全部'];
     viewMode   = settings.view_mode  || 'grid';
     sortBy     = settings.sort_by   || 'manual';
+    gridIconSize = settings.grid_icon_size || 'medium';
+    cardDetailHidden = !!settings.card_detail_hidden;
+    cardListWidth = settings.card_list_width || 340;
 
     // 应用设置
     SettingsPanel.applyAll(settings);
@@ -62,13 +69,16 @@
     AddDialog.init(_onDialogSave);
 
     // 初始化拖拽排序（Grid 和 Card 列表）
+    // 窗口拖动由 pywebview 内置 drag region 机制处理 (#titlebar-drag)
     DragSort.init('#grid-view', '.tool-item', 'id', _onReorder);
     DragSort.rebind('#card-list', '.tool-card', 'id');
-    WindowDrag.init('titlebar-drag');
     WindowResize.init();
 
     _renderCategoryBar();
     _updateDialogCategories();
+    _initCardLayoutControls();
+    _setGridSize(gridIconSize, false);
+    _applyCardLayout(false);
     _switchView(viewMode, false);
     _renderTools();
 
@@ -99,6 +109,28 @@
   // ─── UI 事件绑定 ──────────────────────────────────────────────────────────
 
   function _bindUIEvents() {
+    // OS 文件拖入遮罩 (WebView2 外部拖放会触发页面 drag 事件)
+    let dragDepth = 0;
+    const dropOverlay = document.getElementById('drop-overlay');
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragDepth++;
+      dropOverlay?.classList.add('visible');
+    });
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('dragleave', () => {
+      dragDepth--;
+      if (dragDepth <= 0) {
+        dragDepth = 0;
+        dropOverlay?.classList.remove('visible');
+      }
+    });
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      dropOverlay?.classList.remove('visible');
+    });
+
     // 标题栏按钮
     document.getElementById('btn-minimize')
       ?.addEventListener('click', () => window.AppBridge?.minimizeWindow());
@@ -113,18 +145,20 @@
     document.getElementById('btn-add')
       ?.addEventListener('click', () => AddDialog.open());
 
-    // 搜索
+    // 搜索 (120ms 防抖, 避免每个字符触发全量重建)
     const searchInput = document.getElementById('search-input');
     const searchClear = document.getElementById('search-clear');
     searchInput?.addEventListener('input', (e) => {
       searchText = e.target.value;
       searchClear?.classList.toggle('visible', !!searchText);
-      _renderTools();
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(_renderTools, 120);
     });
     searchClear?.addEventListener('click', () => {
       if (searchInput) searchInput.value = '';
       searchText = '';
       searchClear.classList.remove('visible');
+      clearTimeout(searchDebounceTimer);
       _renderTools();
     });
 
@@ -133,6 +167,18 @@
       ?.addEventListener('click', () => _switchView('grid'));
     document.getElementById('btn-view-card')
       ?.addEventListener('click', () => _switchView('card'));
+
+    // 网格图标大小
+    document.getElementById('btn-grid-small')
+      ?.addEventListener('click', () => _setGridSize('small'));
+    document.getElementById('btn-grid-medium')
+      ?.addEventListener('click', () => _setGridSize('medium'));
+    document.getElementById('btn-grid-large')
+      ?.addEventListener('click', () => _setGridSize('large'));
+
+    // 列表详情显隐
+    document.getElementById('btn-card-detail-toggle')
+      ?.addEventListener('click', _toggleCardDetail);
 
     // 排序菜单
     document.getElementById('btn-sort')
@@ -214,11 +260,92 @@
       cardBtn?.classList.add('active');
     }
 
+    _syncViewToolbar();
+
     if (save) {
       settings.view_mode = mode;
       _saveSettings();
     }
     _renderTools();
+  }
+
+  function _syncViewToolbar() {
+    const switcher = document.getElementById('grid-size-switch');
+    const sep = document.getElementById('sep-grid-size');
+    const show = viewMode === 'grid';
+    if (switcher) switcher.style.display = show ? 'inline-flex' : 'none';
+    if (sep) sep.style.display = show ? '' : 'none';
+  }
+
+  function _setGridSize(size, save = true) {
+    const valid = ['small', 'medium', 'large'];
+    gridIconSize = valid.includes(size) ? size : 'medium';
+    GridView.setIconSize(gridIconSize);
+
+    const map = {
+      small: document.getElementById('btn-grid-small'),
+      medium: document.getElementById('btn-grid-medium'),
+      large: document.getElementById('btn-grid-large'),
+    };
+    Object.entries(map).forEach(([k, el]) => el?.classList.toggle('active', k === gridIconSize));
+
+    if (save) {
+      settings.grid_icon_size = gridIconSize;
+      _saveSettings();
+    }
+  }
+
+  function _initCardLayoutControls() {
+    const cardView = document.getElementById('card-view');
+    const list = document.getElementById('card-list');
+    const splitter = document.getElementById('card-splitter');
+    if (!cardView || !list || !splitter) return;
+
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    splitter.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startWidth = list.getBoundingClientRect().width;
+      document.body.style.cursor = 'col-resize';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const next = Math.max(240, Math.min(760, startWidth + (e.clientX - startX)));
+      cardListWidth = Math.round(next);
+      cardView.style.setProperty('--card-list-width', cardListWidth + 'px');
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = '';
+      settings.card_list_width = cardListWidth;
+      _saveSettings();
+    });
+  }
+
+  function _toggleCardDetail() {
+    cardDetailHidden = !cardDetailHidden;
+    _applyCardLayout();
+  }
+
+  function _applyCardLayout(save = true) {
+    const cardView = document.getElementById('card-view');
+    const btn = document.getElementById('btn-card-detail-toggle');
+    if (!cardView) return;
+    cardView.style.setProperty('--card-list-width', (cardListWidth || 340) + 'px');
+    cardView.classList.toggle('detail-hidden', cardDetailHidden);
+    if (btn) btn.textContent = cardDetailHidden ? '显示详情' : '隐藏详情';
+    if (save) {
+      settings.card_detail_hidden = cardDetailHidden;
+      settings.card_list_width = cardListWidth;
+      _saveSettings();
+    }
   }
 
   // ─── 渲染工具列表 ──────────────────────────────────────────────────────────

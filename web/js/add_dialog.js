@@ -5,16 +5,26 @@
 const AddDialog = (() => {
   let mode = 'add';      // 'add' | 'edit'
   let editId = null;
-  let currentIcon = '';  // base64 或 svg: 前缀
+  let currentIcon = '';  // data URI
   let iconMode = 'auto';
   let tags = [];
   let onSave = null;
+  let previewIconCallback = null;
 
   // ─── 初始化 ─────────────────────────────────────────────────────────────
 
   function init(saveCallback) {
     onSave = saveCallback;
     _bindEvents();
+
+    // 图标预览结果订阅 (Python 通过 iconLoaded 推送 '_preview')
+    window.AppBridge?.onIconLoaded((toolId, iconData) => {
+      if (toolId === '_preview' && previewIconCallback) {
+        const cb = previewIconCallback;
+        previewIconCallback = null;
+        cb(iconData);
+      }
+    });
   }
 
   function _bindEvents() {
@@ -112,6 +122,14 @@ const AddDialog = (() => {
 
     _reset();
     _fillFromTool(tool);
+    // 自动模式下图标不持久化, 编辑时重新提取预览
+    if (iconMode === 'auto' && !currentIcon && tool.path) {
+      previewIconCallback = (iconData) => {
+        currentIcon = iconData;
+        _renderIconPreview(currentIcon, 'auto');
+      };
+      window.AppBridge?.requestIcon('_preview', tool.path);
+    }
     _show();
   }
 
@@ -210,6 +228,12 @@ const AddDialog = (() => {
     let info = {};
     try { info = JSON.parse(infoStr); } catch(e) {}
 
+    // .lnk 解析到目标文件: 路径字段替换为目标位置 (exe 而非快捷方式)
+    const pathEl = document.getElementById('tool-path');
+    if (info.path && info.path !== path) {
+      pathEl.value = info.path;
+    }
+
     // 只在名称为空时自动填充
     const nameEl = document.getElementById('tool-name');
     if (!nameEl.value.trim() && info.name) {
@@ -219,28 +243,14 @@ const AddDialog = (() => {
     const typeEl = document.getElementById('tool-type');
     if (info.type) typeEl.value = info.type;
 
-    // 请求图标
+    // 请求图标 (使用解析后的路径)
     if (iconMode === 'auto') {
-      const tmpId = '_preview';
-      window.AppBridge.requestIcon(tmpId, path);
-      // 监听一次结果
-      _listenIconOnce(tmpId, (iconData) => {
+      previewIconCallback = (iconData) => {
         currentIcon = iconData;
         _renderIconPreview(currentIcon, 'auto');
-      });
+      };
+      window.AppBridge.requestIcon('_preview', info.path || path);
     }
-  }
-
-  function _listenIconOnce(id, cb) {
-    const raw = window.AppBridge?._raw;
-    if (!raw) return;
-    const handler = (toolId, iconData) => {
-      if (toolId === id) {
-        raw.iconLoaded.disconnect(handler);
-        cb(iconData);
-      }
-    };
-    raw.iconLoaded.connect(handler);
   }
 
   // ─── 图标模式 ─────────────────────────────────────────────────────────────
@@ -258,7 +268,7 @@ const AddDialog = (() => {
 
     if (autoGroup)  autoGroup.style.display  = m === 'auto'  ? ''     : 'none';
     if (imageGroup) imageGroup.style.display = m === 'image' ? ''     : 'none';
-    if (textGroup)  textGroup.style.display  = m === 'text'  ? ''     : 'none';
+    if (textGroup)  textGroup.style.display  = m === 'text'  ? 'flex' : 'none';
 
     const name  = document.getElementById('tool-name')?.value || '?';
     const text  = document.getElementById('icon-text-val')?.value  || name.substring(0,2).toUpperCase();
@@ -275,12 +285,8 @@ const AddDialog = (() => {
     const abbr  = text  || '?';
     const clr   = color || '#4a9eff';
 
-    if (mode === 'text' || (!iconData && mode !== 'image')) {
-      previewEl.innerHTML = `<div class="text-icon" style="background:${clr}">${abbr.substring(0,2).toUpperCase()}</div>`;
-    } else if (iconData) {
-      const src = iconData.startsWith('svg:')
-        ? 'data:image/svg+xml;base64,' + iconData.slice(4)
-        : 'data:image/png;base64,' + iconData;
+    const src = mode !== 'text' ? window.iconDataToSrc(iconData) : '';
+    if (src) {
       previewEl.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:contain;border-radius:6px">`;
     } else {
       previewEl.innerHTML = `<div class="text-icon" style="background:${clr}">${abbr.substring(0,2).toUpperCase()}</div>`;
@@ -360,7 +366,8 @@ const AddDialog = (() => {
       name, path, description: desc, args, work_dir: workDir,
       category, type, tags,
       icon_mode: iconMode,
-      icon_data: iconMode !== 'text' ? currentIcon : '',
+      // 自动图标不持久化 (每次启动从磁盘缓存重新提取), 仅自定义图片保存数据
+      icon_data: iconMode === 'image' ? currentIcon : '',
       icon_text: iconText,
       icon_color: iconColor,
     };

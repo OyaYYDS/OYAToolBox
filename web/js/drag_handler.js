@@ -1,61 +1,16 @@
 /**
- * drag_handler.js - 窗口拖动 + 工具项拖拽排序
+ * drag_handler.js - 窗口缩放光标提示 + 工具项拖拽排序
+ *
+ * 窗口拖动: pywebview 内置 drag region 机制 (#titlebar-drag, 原生回调移动窗口)
+ * 窗口缩放: pywebview frameless 窗口原生边缘缩放 (本文件只负责光标提示)
  */
 
-// ─── 窗口拖动 ────────────────────────────────────────────────────────────────
-
-const WindowDrag = (() => {
-  let dragging = false;
-  let startX = 0, startY = 0;
-
-  function init(dragRegionId) {
-    const region = document.getElementById(dragRegionId);
-    if (!region) return;
-
-    region.addEventListener('mousedown', onDown);
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }
-
-  function onDown(e) {
-    if (e.button !== 0) return;
-    dragging = true;
-    startX = e.screenX;
-    startY = e.screenY;
-    e.preventDefault();
-  }
-
-  function onMove(e) {
-    if (!dragging || !window.AppBridge) return;
-    const dx = e.screenX - startX;
-    const dy = e.screenY - startY;
-    startX = e.screenX;
-    startY = e.screenY;
-    if (dx !== 0 || dy !== 0) {
-      window.AppBridge.moveWindow(dx, dy);
-    }
-  }
-
-  function onUp() {
-    dragging = false;
-  }
-
-  return { init };
-})();
-
-
-// ─── 窗口缩放（边缘拖拽）────────────────────────────────────────────────────
+// ─── 窗口缩放光标提示（缩放本身由 pywebview frameless 原生处理）────────────────
 
 const WindowResize = (() => {
   const EDGE = 6;
-  let resizing = false;
-  let edge = '';
-  let startX = 0, startY = 0;
-  let startW = 0, startH = 0;
 
   function init() {
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
     document.addEventListener('mousemove', updateCursor);
   }
 
@@ -71,7 +26,6 @@ const WindowResize = (() => {
   }
 
   function updateCursor(e) {
-    if (resizing) return;
     const e2 = _getEdge(e);
     const cursors = {
       'top': 'n-resize', 'bottom': 's-resize',
@@ -82,46 +36,13 @@ const WindowResize = (() => {
     document.body.style.cursor = cursors[e2] || '';
   }
 
-  document.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
-    const e2 = _getEdge(e);
-    if (!e2) return;
-    resizing = true;
-    edge = e2;
-    startX = e.screenX;
-    startY = e.screenY;
-    startW = window.innerWidth;
-    startH = window.innerHeight;
-    e.preventDefault();
-  });
-
-  function onMove(e) {
-    if (!resizing || !window.AppBridge) return;
-    const dx = e.screenX - startX;
-    const dy = e.screenY - startY;
-    let nw = startW, nh = startH;
-    if (edge.includes('right'))  nw = startW + dx;
-    if (edge.includes('bottom')) nh = startH + dy;
-    if (edge.includes('left'))   nw = startW - dx;
-    if (edge.includes('top'))    nh = startH - dy;
-    nw = Math.max(nw, 800);
-    nh = Math.max(nh, 500);
-    window.AppBridge.resizeWindow(nw, nh);
-  }
-
-  function onUp() {
-    resizing = false;
-    edge = '';
-    document.body.style.cursor = '';
-  }
-
   return { init };
 })();
 
 
 // ─── 工具项拖拽排序（鼠标事件版）─────────────────────────────────────────────
 // 使用 mousedown/mousemove/mouseup 替代 HTML5 Drag API，
-// 避免与 Qt OS 级文件拖放事件冲突（旧版拖拽会误触发"添加工具"对话框）。
+// 避免与 OS 级文件拖放事件冲突（旧版拖拽会误触发"添加工具"对话框）。
 
 const DragSort = (() => {
   const THRESHOLD = 6;          // px - 超过此距离才视为拖拽
@@ -161,7 +82,7 @@ const DragSort = (() => {
         isDragging    = false;
         lastMX = e.clientX;
         lastMY = e.clientY;
-        // 阻止浏览器原生图片/元素拖拽，防止 Qt 接收到 OS 级 drop 事件
+        // 阻止浏览器原生图片/元素拖拽
         e.preventDefault();
         return;
       }

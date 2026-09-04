@@ -1,17 +1,19 @@
 """数据管理器 - 负责工具列表和设置的持久化存储"""
 import json
 import os
+import sys
 import time
 import uuid
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-
-DATA_DIR = Path(__file__).parent.parent / 'data'
+from typing import Any, Dict, List, Optional
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     'theme': 'dark',
     'always_on_top': False,
     'view_mode': 'grid',
+    'grid_icon_size': 'medium',
+    'card_detail_hidden': False,
+    'card_list_width': 340,
     'sort_by': 'manual',
     'window_x': -1,
     'window_y': -1,
@@ -19,6 +21,31 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     'window_height': 800,
     'categories': ['全部', '常用', '开发', '系统', '网络', '办公'],
 }
+
+
+def _resolve_data_dir() -> Path:
+    """数据目录解析:
+    - 源码运行: 仓库 data/
+    - 打包运行: 优先 exe 同目录 data/ (便携), 不可写时回退 %APPDATA%\\OYAToolBox
+    """
+    if getattr(sys, 'frozen', False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidate = exe_dir / 'data'
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            probe = candidate / '.write_test'
+            probe.touch()
+            probe.unlink()
+            return candidate
+        except OSError:
+            appdata = Path(os.environ.get('APPDATA') or str(Path.home()))
+            fallback = appdata / 'OYAToolBox'
+            fallback.mkdir(parents=True, exist_ok=True)
+            return fallback
+    return Path(__file__).resolve().parent.parent / 'data'
+
+
+DATA_DIR = _resolve_data_dir()
 
 
 class DataManager:
@@ -156,12 +183,18 @@ class DataManager:
     # ─── Helpers ──────────────────────────────────────────────────────────────
 
     def _save_tools(self):
-        with open(self.tools_file, 'w', encoding='utf-8') as f:
-            json.dump(self._tools, f, ensure_ascii=False, indent=2)
+        self._write_json(self.tools_file, self._tools)
 
     def _save_settings(self):
-        with open(self.settings_file, 'w', encoding='utf-8') as f:
-            json.dump(self._settings, f, ensure_ascii=False, indent=2)
+        self._write_json(self.settings_file, self._settings)
+
+    @staticmethod
+    def _write_json(path: Path, data: Any):
+        """原子写入: 先写临时文件再替换, 避免写入中断损坏数据"""
+        tmp = path.with_suffix(path.suffix + '.tmp')
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
 
     @staticmethod
     def _name_to_abbr(name: str) -> str:

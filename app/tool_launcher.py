@@ -97,19 +97,29 @@ def open_file_location(path: str) -> tuple[bool, str]:
     """在资源管理器中定位并高亮显示文件"""
     if not path:
         return False, '路径为空'
-    if path.startswith(('http://', 'https://', 'ftp://')):
+
+    raw_path = str(path).strip().strip('"')
+    if raw_path.startswith(('http://', 'https://', 'ftp://')):
         return False, '网址无法在文件管理器中打开'
-    if not os.path.exists(path):
-        return False, f'路径不存在: {path}'
+
+    # 统一处理环境变量、用户目录与相对路径，避免 explorer 参数解析失败后回退到桌面
+    normalized = Path(os.path.expandvars(os.path.expanduser(raw_path)))
+    if not normalized.is_absolute():
+        normalized = normalized.resolve()
+
+    if not normalized.exists():
+        return False, f'路径不存在: {raw_path}'
+
     try:
-        import ctypes
-        ctypes.windll.shell32.ShellExecuteW(
-            None, 'open', 'explorer.exe', f'/select,"{path}"', None, 1
-        )
+        if normalized.is_dir():
+            os.startfile(str(normalized))
+        else:
+            # 使用参数数组避免 /select,"..." 这种拼接在特殊字符场景下被错误拆分
+            subprocess.Popen(['explorer.exe', '/select,', str(normalized)])
         return True, ''
     except Exception:
         try:
-            os.startfile(str(Path(path).parent))
+            os.startfile(str(normalized.parent))
             return True, ''
         except Exception as e2:
             return False, str(e2)

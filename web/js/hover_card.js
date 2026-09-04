@@ -156,7 +156,10 @@ const HoverCard = (() => {
 
   function _iconHtml(tool, size) {
     if (tool.icon_data && tool.icon_mode !== 'text') {
-      return `<img data-id="${tool.id}" src="${_iconSrc(tool.icon_data)}" width="${size}" height="${size}" draggable="false" style="border-radius:6px;pointer-events:none">`;
+      const src = window.iconDataToSrc(tool.icon_data);
+      if (src) {
+        return `<img data-id="${tool.id}" src="${src}" width="${size}" height="${size}" draggable="false" style="border-radius:6px;pointer-events:none">`;
+      }
     }
     const abbr = tool.icon_text || tool.name?.substring(0, 2).toUpperCase() || '?';
     const color = tool.icon_color || '#4a9eff';
@@ -164,8 +167,7 @@ const HoverCard = (() => {
   }
 
   function _iconSrc(data) {
-    if (data.startsWith('svg:')) return 'data:image/svg+xml;base64,' + data.slice(4);
-    return 'data:image/png;base64,' + data;
+    return window.iconDataToSrc(data);
   }
 
   function _esc(str) {

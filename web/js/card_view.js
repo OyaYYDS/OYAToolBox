@@ -41,8 +41,9 @@ const CardView = (() => {
     if (tools.length === 0) {
       listEl.innerHTML = `
         <div class="empty-state" style="margin:20px auto;text-align:center">
-          <div class="empty-icon" style="font-size:36px">🧰</div>
-          <div class="empty-title" style="font-size:14px;margin-top:8px">暂无工具</div>
+          <div class="empty-icon"><img src="img/logo.png" alt="应用图标" draggable="false" style="width:100px;height:100px;object-fit:contain;opacity:.6"></div>
+          <div class="empty-title" style="font-size:14px;margin-top:8px">暂无软件</div>
+          <div class="empty-hint" style="font-size:12px;color:#666;margin-top:4px">点击"添加软件"或<br>将文件拖到此处开始使用</div>
         </div>`;
       _renderDetail(null);
       return;
@@ -249,10 +250,10 @@ const CardView = (() => {
 
   function _iconHtml(tool, size) {
     if (tool.icon_data && tool.icon_mode !== 'text') {
-      const src = tool.icon_data.startsWith('svg:')
-        ? 'data:image/svg+xml;base64,' + tool.icon_data.slice(4)
-        : 'data:image/png;base64,' + tool.icon_data;
-      return `<img src="${src}" width="${size}" height="${size}" draggable="false" style="border-radius:6px;object-fit:contain;pointer-events:none" alt="">`;
+      const src = window.iconDataToSrc(tool.icon_data);
+      if (src) {
+        return `<img src="${src}" width="${size}" height="${size}" draggable="false" style="border-radius:6px;object-fit:contain;pointer-events:none" alt="">`;
+      }
     }
     const abbr  = (tool.icon_text  || tool.name?.substring(0,2) || '?').substring(0,2).toUpperCase();
     const color = tool.icon_color || '#4a9eff';
