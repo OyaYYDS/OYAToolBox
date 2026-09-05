@@ -259,8 +259,8 @@ def _cache_path_for(path: str) -> Path:
         mtime = os.path.getmtime(path)
     except OSError:
         mtime = 0
-    # v3: 提取管线升级 (PrivateExtractIconsW 按 48px 精确提取), 旧缓存全部失效重提
-    key = hashlib.sha1(f'v3|{path}|{mtime}'.encode('utf-8')).hexdigest()[:16]
+    # v4: .lnk 改用 GetIconLocation 解析自定义图标 (DLL 内图标), 旧缓存全部失效重提
+    key = hashlib.sha1(f'v4|{path}|{mtime}'.encode('utf-8')).hexdigest()[:16]
     return _cache_dir() / f'{key}_{ICON_SIZE}.png'
 
 
@@ -298,8 +298,18 @@ def _get_hicon(path: str) -> Optional[int]:
     p = Path(path)
     ext = p.suffix.lower()
 
-    # .lnk: 解析目标后取目标图标
+    # .lnk: 优先取快捷方式自定义图标位置 (常在 DLL 中, 与目标 exe 不同)
     if ext == '.lnk':
+        info = resolve_lnk_icon(path)
+        if info:
+            icon_path, icon_index = info
+            if icon_path and os.path.exists(icon_path):
+                hicon = _extract_highres_ex(icon_path, icon_index)
+                if hicon:
+                    return hicon
+                hicon = _extract_icon_ex(icon_path, icon_index)
+                if hicon:
+                    return hicon
         target = _lnk_target(path)
         if target and os.path.exists(target):
             hicon = _get_hicon(target)
@@ -324,8 +334,8 @@ def _get_hicon(path: str) -> Optional[int]:
     return _get_file_icon_by_attributes(path)
 
 
-def _extract_highres_ex(path: str) -> Optional[int]:
-    """PrivateExtractIconsW 按目标尺寸 (48px) 直接从文件资源提取图标"""
+def _extract_highres_ex(path: str, index: int = 0) -> Optional[int]:
+    """PrivateExtractIconsW 按目标尺寸 (48px) 直接从文件资源提取图标 (支持 DLL 索引)"""
     try:
         user32.PrivateExtractIconsW.argtypes = [
             wintypes.LPCWSTR, ctypes.c_int, ctypes.c_int, ctypes.c_int,
@@ -334,14 +344,14 @@ def _extract_highres_ex(path: str) -> Optional[int]:
         ]
         hicon = wintypes.HICON()
         n = user32.PrivateExtractIconsW(
-            str(path), 0, ICON_SIZE, ICON_SIZE, ctypes.byref(hicon), None, 1, 0,
+            str(path), index, ICON_SIZE, ICON_SIZE, ctypes.byref(hicon), None, 1, 0,
         )
         return hicon.value if n > 0 and hicon.value else None
     except Exception:
         return None
 
 
-def _extract_icon_ex(path: str) -> Optional[int]:
+def _extract_icon_ex(path: str, index: int = 0) -> Optional[int]:
     """ExtractIconExW 提取 exe/dll/ico 真实图标 (不需要 shell token)"""
     try:
         shell32.ExtractIconExW.argtypes = [
@@ -350,7 +360,7 @@ def _extract_icon_ex(path: str) -> Optional[int]:
         ]
         large = wintypes.HICON()
         small = wintypes.HICON()
-        n = shell32.ExtractIconExW(str(path), 0, ctypes.byref(large), ctypes.byref(small), 1)
+        n = shell32.ExtractIconExW(str(path), index, ctypes.byref(large), ctypes.byref(small), 1)
         if n <= 0 or not large.value:
             return None
         if small.value:
@@ -392,57 +402,100 @@ def _shgetfileinfo(path: str, flags: int, file_attributes: int = 0) -> Optional[
         return None
 
 
+def _vcall(ptr, index, restype, argtypes, *args):
+    """COM vtable 通用调用器 (IUnknown 对象)"""
+    vtbl = ctypes.cast(ptr, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))
+    proto = ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, *argtypes)
+    return proto(vtbl[0][index])(ptr, *args)
+
+
+def _open_shell_link(path: str) -> Optional[int]:
+    """加载 .lnk 文件, 返回 IShellLinkW 接口指针 (调用者负责 Release)"""
+    ole32 = ctypes.windll.ole32
+    # 初始化 COM 公寓 (工作线程/主线程通用, 重复调用返回 S_FALSE 无副作用)
+    ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED
+
+    CLSID_ShellLink = GUID(0x00021401, 0, 0, (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
+    IID_IShellLinkW = GUID(0x000214F9, 0, 0, (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
+    IID_IPersistFile = GUID(0x0000010B, 0, 0, (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
+
+    isl = ctypes.c_void_p()
+    hr = ole32.CoCreateInstance(
+        ctypes.byref(CLSID_ShellLink), None, 1,  # CLSCTX_INPROC_SERVER
+        ctypes.byref(IID_IShellLinkW), ctypes.byref(isl),
+    )
+    if hr < 0 or not isl:
+        return None
+
+    # IPersistFile::Load (vtable index 5)
+    ipf = ctypes.c_void_p()
+    hr = _vcall(isl, 0, ctypes.c_long,
+                (ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)),
+                ctypes.byref(IID_IPersistFile), ctypes.byref(ipf))
+    if hr < 0 or not ipf:
+        _vcall(isl, 2, ctypes.c_ulong, ())
+        return None
+    try:
+        _vcall(ipf, 5, ctypes.c_long, (wintypes.LPCWSTR, wintypes.DWORD), str(path), 0)
+    finally:
+        _vcall(ipf, 2, ctypes.c_ulong, ())
+    return isl.value
+
+
 def resolve_lnk_target(path: str) -> Optional[str]:
     """解析 .lnk 快捷方式的目标路径 (纯 ctypes IShellLinkW, 无外部依赖)"""
+    isl = _open_shell_link(path)
+    if not isl:
+        return None
     try:
-        ole32 = ctypes.windll.ole32
-        # 初始化 COM 公寓 (工作线程/主线程通用, 重复调用返回 S_FALSE 无副作用)
-        ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED
-
-        CLSID_ShellLink = GUID(0x00021401, 0, 0, (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
-        IID_IShellLinkW = GUID(0x000214F9, 0, 0, (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
-        IID_IPersistFile = GUID(0x0000010B, 0, 0, (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
-
-        isl = ctypes.c_void_p()
-        hr = ole32.CoCreateInstance(
-            ctypes.byref(CLSID_ShellLink), None, 1,  # CLSCTX_INPROC_SERVER
-            ctypes.byref(IID_IShellLinkW), ctypes.byref(isl),
-        )
-        if hr < 0 or not isl:
+        # IShellLinkW::GetPath (vtable index 3), SLGP_UNCPRIORITY=2
+        buf = ctypes.create_unicode_buffer(1024)
+        hr = _vcall(isl, 3, ctypes.c_long,
+                    (wintypes.LPWSTR, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD),
+                    buf, 1024, None, 2)
+        if hr < 0:
             return None
-
-        try:
-            # 通用 vtable 调用器
-            def _call(ptr, index, restype, argtypes, *args):
-                vtbl = ctypes.cast(ptr, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))
-                proto = ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, *argtypes)
-                return proto(vtbl[0][index])(ptr, *args)
-
-            # IPersistFile::Load (vtable index 5)
-            ipf = ctypes.c_void_p()
-            hr = _call(isl, 0, ctypes.c_long,
-                       (ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)),
-                       ctypes.byref(IID_IPersistFile), ctypes.byref(ipf))
-            if hr < 0 or not ipf:
-                return None
-            try:
-                _call(ipf, 5, ctypes.c_long, (wintypes.LPCWSTR, wintypes.DWORD),
-                      str(path), 0)
-
-                # IShellLinkW::GetPath (vtable index 3), SLGP_UNCPRIORITY=2
-                buf = ctypes.create_unicode_buffer(1024)
-                hr = _call(isl, 3, ctypes.c_long,
-                           (wintypes.LPWSTR, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD),
-                           buf, 1024, None, 2)
-                if hr < 0:
-                    return None
-                return buf.value or None
-            finally:
-                _call(ipf, 2, ctypes.c_ulong, ())
-        finally:
-            _call(isl, 2, ctypes.c_ulong, ())
+        return buf.value or None
     except Exception:
         return None
+    finally:
+        _vcall(isl, 2, ctypes.c_ulong, ())
+
+
+def resolve_lnk_icon(path: str) -> Optional[tuple]:
+    """解析 .lnk 快捷方式的图标位置 (icon_path, icon_index)
+
+    快捷方式常用自定义图标 (存于 DLL 中, 与目标 exe 不同), 必须用
+    IShellLinkW::GetIconLocation 获取真实图标位置。
+    """
+    isl = _open_shell_link(path)
+    if not isl:
+        return None
+    try:
+        # IShellLinkW::GetIconLocation (vtable index 16)
+        buf = ctypes.create_unicode_buffer(1024)
+        idx = ctypes.c_int(0)
+        hr = _vcall(isl, 16, ctypes.c_long,
+                    (wintypes.LPWSTR, ctypes.c_int, ctypes.POINTER(ctypes.c_int)),
+                    buf, 1024, ctypes.byref(idx))
+        if hr < 0:
+            return None
+        icon_path = (buf.value or '').strip().strip('"')
+        if icon_path:
+            try:
+                icon_path = os.path.expandvars(os.path.expanduser(icon_path))
+            except Exception:
+                pass
+            return icon_path, max(idx.value, 0)
+        # 无自定义图标: 用目标路径
+        target = resolve_lnk_target(path)
+        if target:
+            return target, 0
+        return None
+    except Exception:
+        return None
+    finally:
+        _vcall(isl, 2, ctypes.c_ulong, ())
 
 
 def _lnk_target(path: str) -> Optional[str]:

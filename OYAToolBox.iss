@@ -26,6 +26,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
+; 始终显示安装位置选择页 (默认 auto 在检测到已有安装时会跳过该页直接原位更新)
+DisableDirPage=no
 SetupIconFile=OYAToolBoxICO.ico
 
 [Languages]
