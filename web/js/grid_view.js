@@ -81,9 +81,14 @@ const GridView = (() => {
       const tool = tools.find(t => t.id === id);
       _select(id);
       if (tool) {
-        const rect = item.getBoundingClientRect();
-        HoverCard.show(tool, rect.right, rect.top);
-        HoverCard.lock(id);
+        if (HoverCard.isLocked() && HoverCard.getLockId() === id) {
+          // 同一工具再次左键: 取消固定 (满屏时无需找空白处)
+          HoverCard.unlock();
+        } else {
+          const rect = item.getBoundingClientRect();
+          HoverCard.show(tool, rect.right, rect.top);
+          HoverCard.lock(id);
+        }
       }
       if (onSelect) onSelect(id);
     });

@@ -14,9 +14,10 @@ const HoverCard = (() => {
     el = document.getElementById('hover-card');
     if (!el) return;
 
-    // 点击空白区域解锁
+    // 点击空白区域解锁 (工具项上的按下由 grid 点击逻辑处理, 用于固定/取消固定切换)
     document.addEventListener('mousedown', (e) => {
       if (locked && !el.contains(e.target)) {
+        if (e.target.closest('.tool-item')) return;
         unlock();
       }
     });
