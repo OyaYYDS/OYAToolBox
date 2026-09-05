@@ -39,29 +39,32 @@ def main():
     def _x_or_none(value):
         return value if isinstance(value, int) and value >= 0 else None
 
-    kwargs = dict(
+    window = webview.create_window(
         title='OYAToolBox',
         url=str(html_path),
         js_api=api,
-        width=int(settings.get('window_width', 1200)),
-        height=int(settings.get('window_height', 800)),
+        width=int(settings.get('window_width', 800)),
+        height=int(settings.get('window_height', 600)),
         x=_x_or_none(settings.get('window_x')),
         y=_x_or_none(settings.get('window_y')),
         min_size=(800, 500),
         frameless=True,
         easy_drag=False,          # 关闭整窗拖动, 防止与工具项拖拽排序冲突
         on_top=bool(settings.get('always_on_top', False)),
-        transparent=True,         # 圆角窗口需要页面透明背景
-        background_color='#0c0c12',
+        # 不透明窗口: 页面用 CSS 填满背景, 圆角由 DWM 处理 (避免 transparent=True
+        # 导致窗体白色背景从页面圆角处透出的问题)
+        transparent=False,
+        background_color=_resolve_window_bg(settings),
         text_select=False,
     )
-    try:
-        window = webview.create_window(**kwargs, shadow=True)
-    except TypeError:
-        # 旧版 pywebview 无 shadow 参数
-        window = webview.create_window(**kwargs)
 
     api.attach_window(window)
+    api.set_desired_geometry(
+        _x_or_none(settings.get('window_x')),
+        _x_or_none(settings.get('window_y')),
+        int(settings.get('window_width', 800)),
+        int(settings.get('window_height', 600)),
+    )
     window.events.shown += api.on_window_shown
     window.events.closing += api.on_window_closing
 
@@ -91,6 +94,22 @@ def _json_loads(text: str):
         return json.loads(text)
     except Exception:
         return None
+
+
+def _resolve_window_bg(settings: dict) -> str:
+    """按主题解析窗口底色 (页面 CSS 加载前避免白闪/黑闪)"""
+    theme = settings.get('theme', 'dark')
+    if theme == 'system':
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize',
+            )
+            theme = 'dark' if winreg.QueryValueEx(key, 'AppsUseLightTheme')[0] == 0 else 'light'
+        except Exception:
+            theme = 'dark'
+    return '#0c0c12' if theme == 'dark' else '#f0f2f8'
 
 
 if __name__ == '__main__':

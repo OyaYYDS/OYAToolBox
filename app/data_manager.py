@@ -13,12 +13,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     'view_mode': 'grid',
     'grid_icon_size': 'medium',
     'card_detail_hidden': False,
-    'card_list_width': 340,
+    'card_list_ratio': 0.49,   # 列表视图左侧列表宽度占窗口宽度的比例 (随窗口缩放)
     'sort_by': 'manual',
     'window_x': -1,
     'window_y': -1,
-    'window_width': 1200,
-    'window_height': 800,
+    'window_width': 800,
+    'window_height': 600,
     'categories': ['全部', '常用', '开发', '系统', '网络', '办公'],
 }
 

@@ -69,7 +69,7 @@ const GridView = (() => {
   function _bindContainerEvents() {
     if (!container) return;
 
-    // 单击选中
+    // 单击选中 + 固定悬浮信息卡 (左键)
     container.addEventListener('click', (e) => {
       const item = e.target.closest('.tool-item');
       if (!item) {
@@ -78,7 +78,13 @@ const GridView = (() => {
         return;
       }
       const id = item.dataset.id;
+      const tool = tools.find(t => t.id === id);
       _select(id);
+      if (tool) {
+        const rect = item.getBoundingClientRect();
+        HoverCard.show(tool, rect.right, rect.top);
+        HoverCard.lock(id);
+      }
       if (onSelect) onSelect(id);
     });
 
@@ -96,18 +102,15 @@ const GridView = (() => {
       }
     });
 
-    // 右键菜单
+    // 右键菜单 (信息卡固定已改为左键, 此处只弹菜单)
     container.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const item = e.target.closest('.tool-item');
       if (!item) return;
       const id = item.dataset.id;
-      const tool = tools.find(t => t.id === id);
       _select(id);
       HoverCard.cancelShow();
       HoverCard.cancelHide();
-      if (tool) HoverCard.show(tool, e.clientX, e.clientY);
-      HoverCard.lock(id);
       if (onContextMenu) onContextMenu(id, e.clientX, e.clientY);
     });
 

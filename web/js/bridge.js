@@ -91,10 +91,13 @@ function wrapBridge(raw) {
     copyPath:       (id)               => raw.copyPath(id),
     getFileInfo:    (path)             => raw.getFileInfo(path),
 
-    // 窗口控制 (拖动/缩放由 pywebview 原生处理: drag region + frameless 边缘缩放)
+    // 窗口控制 (拖动由 pywebview drag region 原生处理)
     minimizeWindow: ()                 => raw.minimizeWindow(),
     closeWindow:    ()                 => raw.closeWindow(),
     setAlwaysOnTop: (on)               => raw.setAlwaysOnTop(on),
+    resizeWindow:   (w, h)             => raw.resizeWindow(w, h),
+    setWindowRect:  (x, y, w, h)       => raw.setWindowRect(x, y, w, h),
+    getWindowSize:  ()                 => raw.getWindowSize(),
 
     // 信号订阅
     onToolsUpdated:    (fn)            => on('toolsUpdated', fn),

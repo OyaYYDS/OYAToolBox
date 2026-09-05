@@ -5,13 +5,24 @@
  * 窗口缩放: pywebview frameless 窗口原生边缘缩放 (本文件只负责光标提示)
  */
 
-// ─── 窗口缩放光标提示（缩放本身由 pywebview frameless 原生处理）────────────────
+// ─── 窗口缩放 ────────────────────────────────────────────────────────────────
+// 双保险: WM_NCHITTEST 原生路径未接管时 (页面仍能收到 mousemove),
+// 由 JS 直接调用 pywebview 的 window.resize 驱动缩放 (硬件加速下流畅)
 
 const WindowResize = (() => {
   const EDGE = 6;
+  const MIN_W = 800, MIN_H = 500;
+
+  let resizing = false;
+  let edge = '';
+  let startX = 0, startY = 0;
+  let startWin = null;   // [x, y, w, h] 物理像素基准 (mousedown 时异步获取)
 
   function init() {
     document.addEventListener('mousemove', updateCursor);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('mouseup', onUp);
   }
 
   function _getEdge(e) {
@@ -34,6 +45,61 @@ const WindowResize = (() => {
       'bottomleft': 'sw-resize', 'bottomright': 'se-resize',
     };
     document.body.style.cursor = cursors[e2] || '';
+  }
+
+  function onDown(e) {
+    if (e.button !== 0) return;
+    const e2 = _getEdge(e);
+    if (!e2) return;
+    resizing = true;
+    edge = e2;
+    startX = e.screenX;
+    startY = e.screenY;
+    startWin = null;
+    e.preventDefault();
+    // 异步取窗口物理位置/尺寸作为缩放基准 (CSS 像素与物理像素在缩放屏下不一致)
+    window.AppBridge?.getWindowSize().then((str) => {
+      const r = JSON.parse(str || '[0,0,0,0]');
+      if (r[2] > 0) startWin = r;
+    }).catch(() => {});
+  }
+
+  function onMove(e) {
+    if (!resizing || !startWin) return;
+    const dx = e.screenX - startX;
+    const dy = e.screenY - startY;
+    let nx = startWin[0], ny = startWin[1];
+    let nw = startWin[2], nh = startWin[3];
+
+    // 各边缘锚点: 右/下只改尺寸; 左/上改尺寸同时移动位置 (对边保持不动)
+    if (edge.includes('right'))  nw = startWin[2] + dx;
+    if (edge.includes('left')) {
+      nw = startWin[2] - dx;
+      nx = startWin[0] + dx;
+    }
+    if (edge.includes('bottom')) nh = startWin[3] + dy;
+    if (edge.includes('top')) {
+      nh = startWin[3] - dy;
+      ny = startWin[1] + dy;
+    }
+
+    // 最小尺寸钳制 (左/上边缘要同步回推位置, 保证对边锚点不动)
+    if (nw < MIN_W) {
+      if (edge.includes('left')) nx = startWin[0] + startWin[2] - MIN_W;
+      nw = MIN_W;
+    }
+    if (nh < MIN_H) {
+      if (edge.includes('top')) ny = startWin[1] + startWin[3] - MIN_H;
+      nh = MIN_H;
+    }
+
+    window.AppBridge?.setWindowRect(Math.round(nx), Math.round(ny), Math.round(nw), Math.round(nh));
+  }
+
+  function onUp() {
+    resizing = false;
+    edge = '';
+    startWin = null;
   }
 
   return { init };

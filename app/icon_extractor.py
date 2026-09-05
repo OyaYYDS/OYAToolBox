@@ -259,7 +259,8 @@ def _cache_path_for(path: str) -> Path:
         mtime = os.path.getmtime(path)
     except OSError:
         mtime = 0
-    key = hashlib.sha1(f'{path}|{mtime}'.encode('utf-8')).hexdigest()[:16]
+    # v3: 提取管线升级 (PrivateExtractIconsW 按 48px 精确提取), 旧缓存全部失效重提
+    key = hashlib.sha1(f'v3|{path}|{mtime}'.encode('utf-8')).hexdigest()[:16]
     return _cache_dir() / f'{key}_{ICON_SIZE}.png'
 
 
@@ -310,14 +311,34 @@ def _get_hicon(path: str) -> Optional[int]:
     if p.is_dir():
         return _get_folder_hicon(path)
 
-    # 可执行文件/图标库/图标文件: 提取真实图标
+    # 可执行文件/图标库/图标文件: 按 48px 精确提取真实图标 (清晰, 避免 32px 放大模糊)
     if ext in ('.exe', '.dll', '.scr', '.ico'):
+        hicon = _extract_highres_ex(path)
+        if hicon:
+            return hicon
         hicon = _extract_icon_ex(path)
         if hicon:
             return hicon
 
     # 其他文件: 系统关联图标
     return _get_file_icon_by_attributes(path)
+
+
+def _extract_highres_ex(path: str) -> Optional[int]:
+    """PrivateExtractIconsW 按目标尺寸 (48px) 直接从文件资源提取图标"""
+    try:
+        user32.PrivateExtractIconsW.argtypes = [
+            wintypes.LPCWSTR, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.POINTER(wintypes.HICON), ctypes.POINTER(wintypes.UINT),
+            wintypes.UINT, wintypes.UINT,
+        ]
+        hicon = wintypes.HICON()
+        n = user32.PrivateExtractIconsW(
+            str(path), 0, ICON_SIZE, ICON_SIZE, ctypes.byref(hicon), None, 1, 0,
+        )
+        return hicon.value if n > 0 and hicon.value else None
+    except Exception:
+        return None
 
 
 def _extract_icon_ex(path: str) -> Optional[int]:

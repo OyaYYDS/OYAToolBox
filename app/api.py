@@ -29,6 +29,7 @@ class Api:
         self._dm = DataManager()
         self._window = None
         self._hwnd = None
+        self._desired_geom = None
         self._executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix='icon')
         self._last_dialog_dir = ''
 
@@ -37,19 +38,32 @@ class Api:
     def attach_window(self, window):
         self._window = window
 
+    def set_desired_geometry(self, x, y, width, height):
+        """记录目标窗口外框 (pywebview frameless 会缩水, shown 时强制校正)"""
+        self._desired_geom = (x, y, width, height)
+
     def on_window_shown(self):
         self._hwnd = win_effects.find_main_hwnd(os.getpid())
         win_effects.apply_window_effects(self._hwnd)
+        win_effects.install_resize_support(self._hwnd)
+        if self._desired_geom:
+            win_effects.apply_window_geometry(self._hwnd, *self._desired_geom)
 
     def on_window_closing(self):
-        """关闭前保存窗口几何信息"""
+        """关闭前保存窗口几何信息 (取真实窗口外框, 避免尺寸漂移)"""
         try:
-            w = self._window
+            rect = win_effects.get_window_rect(self._hwnd)
+            if rect:
+                x, y, width, height = rect
+            else:
+                w = self._window
+                x, y = int(w.x or 0), int(w.y or 0)
+                width, height = int(w.width), int(w.height)
             settings = self._dm.get_settings()
-            settings['window_x'] = int(w.x or 0)
-            settings['window_y'] = int(w.y or 0)
-            settings['window_width'] = int(w.width)
-            settings['window_height'] = int(w.height)
+            settings['window_x'] = x
+            settings['window_y'] = y
+            settings['window_width'] = width
+            settings['window_height'] = height
             self._dm.save_settings(settings)
         except Exception:
             pass
@@ -268,6 +282,31 @@ class Api:
             self._window.minimize()
         except Exception:
             pass
+
+    def resizeWindow(self, width: int, height: int):
+        """边缘缩放 (JS 驱动, 每帧调用; 原生路径未接管时生效)"""
+        try:
+            self._window.resize(max(int(width), 800), max(int(height), 500))
+        except Exception:
+            pass
+
+    def setWindowRect(self, x: int, y: int, width: int, height: int):
+        """一次调用同时设置窗口位置与尺寸 (缩放锚点正确性需要两者联动)"""
+        hwnd = self._hwnd or win_effects.find_main_hwnd(os.getpid())
+        self._hwnd = hwnd
+        win_effects.set_window_rect(hwnd, x, y, width, height)
+
+    def getWindowSize(self) -> str:
+        """窗口真实外框 [x, y, width, height] (物理像素), 供 JS 缩放基准计算"""
+        rect = win_effects.get_window_rect(self._hwnd)
+        if rect:
+            return json.dumps(list(rect), ensure_ascii=False)
+        try:
+            w = self._window
+            return json.dumps([int(w.x or 0), int(w.y or 0), int(w.width), int(w.height)],
+                              ensure_ascii=False)
+        except Exception:
+            return json.dumps([0, 0, 0, 0], ensure_ascii=False)
 
     def closeWindow(self):
         try:

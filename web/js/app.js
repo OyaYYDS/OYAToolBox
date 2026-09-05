@@ -17,7 +17,7 @@
   let contextMenuOpen = false;
   let gridIconSize = 'medium';
   let cardDetailHidden = false;
-  let cardListWidth = 340;
+  let cardListRatio = 0.49;   // 列表宽度占窗口宽度比例 (随窗口缩放联动)
   let searchDebounceTimer = null;
 
   // ─── 初始化 ────────────────────────────────────────────────────────────────
@@ -45,7 +45,11 @@
     sortBy     = settings.sort_by   || 'manual';
     gridIconSize = settings.grid_icon_size || 'medium';
     cardDetailHidden = !!settings.card_detail_hidden;
-    cardListWidth = settings.card_list_width || 340;
+    // 兼容旧版绝对像素值: 按旧默认窗口宽 1200 折算为比例
+    cardListRatio = typeof settings.card_list_ratio === 'number'
+      ? settings.card_list_ratio
+      : (settings.card_list_width ? settings.card_list_width / 1200 : 0.49);
+    cardListRatio = Math.min(0.8, Math.max(0.15, cardListRatio));
 
     // 应用设置
     SettingsPanel.applyAll(settings);
@@ -258,6 +262,9 @@
       if (cardV) cardV.style.display = '';
       gridBtn?.classList.remove('active');
       cardBtn?.classList.add('active');
+      // 每次进入列表视图: 分栏重置为正中间; 此后窗口缩放按比例联动
+      cardListRatio = 0.5;
+      _applyCardLayout(false);
     }
 
     _syncViewToolbar();
@@ -295,6 +302,12 @@
     }
   }
 
+  function _ratioToPx(winWidth) {
+    // 列表宽度 = 比例 × 窗口宽; 约束: 最少 240, 详情面板至少保留 320
+    const maxPx = Math.max(240, winWidth - 320);
+    return Math.round(Math.min(maxPx, Math.max(240, cardListRatio * winWidth)));
+  }
+
   function _initCardLayoutControls() {
     const cardView = document.getElementById('card-view');
     const list = document.getElementById('card-list');
@@ -315,17 +328,30 @@
 
     window.addEventListener('mousemove', (e) => {
       if (!dragging) return;
-      const next = Math.max(240, Math.min(760, startWidth + (e.clientX - startX)));
-      cardListWidth = Math.round(next);
-      cardView.style.setProperty('--card-list-width', cardListWidth + 'px');
+      const winW = cardView.clientWidth;
+      const maxPx = Math.max(240, winW - 320);
+      const next = Math.max(240, Math.min(maxPx, startWidth + (e.clientX - startX)));
+      cardView.style.setProperty('--card-list-width', next + 'px');
+      // 拖拽同时更新比例, 之后窗口缩放按新比例联动
+      cardListRatio = next / winW;
     });
 
     window.addEventListener('mouseup', () => {
       if (!dragging) return;
       dragging = false;
       document.body.style.cursor = '';
-      settings.card_list_width = cardListWidth;
+      settings.card_list_ratio = cardListRatio;
       _saveSettings();
+    });
+
+    // 窗口缩放时按比例重新计算列表宽度 (rAF 节流, 每帧至多一次)
+    let resizeRaf = null;
+    window.addEventListener('resize', () => {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = null;
+        if (viewMode === 'card') _applyCardLayout(false);
+      });
     });
   }
 
@@ -338,12 +364,12 @@
     const cardView = document.getElementById('card-view');
     const btn = document.getElementById('btn-card-detail-toggle');
     if (!cardView) return;
-    cardView.style.setProperty('--card-list-width', (cardListWidth || 340) + 'px');
+    cardView.style.setProperty('--card-list-width', _ratioToPx(cardView.clientWidth) + 'px');
     cardView.classList.toggle('detail-hidden', cardDetailHidden);
     if (btn) btn.textContent = cardDetailHidden ? '显示详情' : '隐藏详情';
     if (save) {
       settings.card_detail_hidden = cardDetailHidden;
-      settings.card_list_width = cardListWidth;
+      settings.card_list_ratio = cardListRatio;
       _saveSettings();
     }
   }
