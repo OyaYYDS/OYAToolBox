@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 
 import webview
@@ -56,6 +57,7 @@ def main():
         transparent=False,
         background_color=_resolve_window_bg(settings),
         text_select=False,
+        hidden=True,              # 先隐藏, 页面渲染完成后显示 (避免启动白屏闪烁)
     )
 
     api.attach_window(window)
@@ -67,6 +69,22 @@ def main():
     )
     window.events.shown += api.on_window_shown
     window.events.closing += api.on_window_closing
+
+    # 页面渲染完成后显示窗口; 兜底 4 秒强制显示 (页面异常时不至于无窗口)
+    _shown = False
+
+    def _show_when_ready():
+        nonlocal _shown
+        if _shown:
+            return
+        _shown = True
+        try:
+            window.show()
+        except Exception:
+            pass
+
+    window.events.loaded += _show_when_ready
+    threading.Timer(4.0, _show_when_ready).start()
 
     # OS 文件拖入: 注册 body drop 监听 (pywebview DOM API 自动配对完整文件路径)
     from webview.dom import DOMEventHandler
