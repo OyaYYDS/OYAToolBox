@@ -72,8 +72,9 @@ function wrapBridge(raw) {
     launchTool:    (id)                => raw.launchTool(id),
 
     // 图标
-    requestIcon:    (id, path)         => raw.requestIcon(id, path),   // 异步推送
+    requestIcon:    (id, path, index)  => raw.requestIcon(id, path, index || 0),   // 异步推送
     extractIconSync:(path)             => raw.extractIconSync(path),
+    listFileIcons:  (path)             => raw.listFileIcons(path),
 
     // 设置
     getSettings:   ()                  => raw.getSettings(),

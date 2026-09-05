@@ -164,6 +164,51 @@ def extract_icon(path: str) -> Optional[str]:
         return None
 
 
+def extract_icon_from(path: str, index: int = 0) -> Optional[str]:
+    """从文件指定索引提取图标 (data URI), 用于自定义程序/DLL 图标模式"""
+    if not path:
+        return None
+    try:
+        gdip = _gdiplus()
+        if gdip is None:
+            return None
+        hicon = _extract_highres_ex(path, index) or _extract_icon_ex(path, index)
+        if not hicon:
+            return None
+        try:
+            png = _hicon_to_png(gdip, hicon, ICON_SIZE)
+        finally:
+            user32.DestroyIcon(hicon)
+        if not png:
+            return None
+        return 'data:image/png;base64,' + base64.b64encode(png).decode()
+    except Exception:
+        return None
+
+
+def list_file_icons(path: str, limit: int = 32) -> list:
+    """列出 exe/dll/ico 文件内的图标, 返回 [(index, data_uri), ...]"""
+    result = []
+    if not path:
+        return result
+    try:
+        user32.PrivateExtractIconsW.argtypes = [
+            wintypes.LPCWSTR, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.POINTER(wintypes.HICON), ctypes.POINTER(wintypes.UINT),
+            wintypes.UINT, wintypes.UINT,
+        ]
+        total = user32.PrivateExtractIconsW(str(path), -1, ICON_SIZE, ICON_SIZE, None, None, 0, 0)
+        if total <= 0:
+            return result
+        for idx in range(min(total, limit)):
+            data = extract_icon_from(path, idx)
+            if data:
+                result.append([idx, data])
+    except Exception:
+        pass
+    return result
+
+
 def icon_file_to_data_url(path: str) -> Optional[str]:
     """把用户选择的图片/图标文件转为 data URI (对话框自定义图标用)"""
     if not path:

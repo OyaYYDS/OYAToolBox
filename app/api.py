@@ -118,16 +118,27 @@ class Api:
 
     # ─── 图标 ─────────────────────────────────────────────────────────────────
 
-    def requestIcon(self, tool_id: str, path: str):
+    def requestIcon(self, tool_id: str, path: str, index: int = 0):
         """异步提取图标, 完成后通过 iconLoaded 推回前端"""
-        self._executor.submit(self._icon_worker, tool_id, path)
+        self._executor.submit(self._icon_worker, tool_id, path, int(index or 0))
 
-    def _icon_worker(self, tool_id: str, path: str):
+    def _icon_worker(self, tool_id: str, path: str, index: int = 0):
         try:
-            data = extract_icon(path)
+            if index:
+                data = extract_icon_from(path, index)
+            else:
+                data = extract_icon(path)
         except Exception:
             data = None
         self._push('iconLoaded', tool_id, data or '')
+
+    def listFileIcons(self, path: str) -> str:
+        """列出 exe/dll/ico 文件内的图标 (最多 32 个), 供图标选择器使用"""
+        from .icon_extractor import list_file_icons
+        try:
+            return json.dumps(list_file_icons(path, limit=32), ensure_ascii=False)
+        except Exception:
+            return json.dumps([], ensure_ascii=False)
 
     def extractIconSync(self, path: str) -> str:
         """同步转换图标 (对话框预览用): 返回 data URI"""

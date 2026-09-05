@@ -163,17 +163,22 @@
             <div class="icon-mode-btns">
               <button class="icon-mode-btn active" data-mode="auto">🤖 自动</button>
               <button class="icon-mode-btn"        data-mode="image">🖼 图片</button>
+              <button class="icon-mode-btn"        data-mode="program">📦 程序</button>
               <button class="icon-mode-btn"        data-mode="text">✏ 文字</button>
             </div>
             <div id="icon-image-group" style="display:none;margin-top:8px">
               <button class="btn secondary" id="btn-browse-icon" style="height:28px;font-size:12px">选择图片…</button>
+            </div>
+            <div id="icon-program-group" style="display:none;margin-top:8px">
+              <button class="btn secondary" id="btn-browse-program" style="height:28px;font-size:12px">选择程序/DLL 提取图标…</button>
+              <div id="icon-program-info" style="font-size:11px;color:var(--text-tertiary);margin-top:4px"></div>
             </div>
             <div id="icon-text-group" style="display:none;margin-top:8px;gap:8px;align-items:center">
               <input type="text" class="form-input" id="icon-text-val" placeholder="文字(最多2个)" maxlength="2" style="width:70px">
               <input type="color" id="icon-color-val" value="#4a9eff" style="width:36px;height:28px;border:none;background:none;cursor:pointer;padding:2px">
             </div>
             <div id="icon-auto-group" style="margin-top:6px">
-              <span style="font-size:11px;color:var(--text-tertiary)">自动从文件提取图标</span>
+              <span style="font-size:11px;color:var(--text-tertiary)">自动从文件提取图标 (快捷方式会解析真实图标位置)</span>
             </div>
           </div>
         </div>

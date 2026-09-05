@@ -553,7 +553,7 @@
     // 请求新增工具的图标
     allTools.forEach(t => {
       if (!t.icon_data && t.icon_mode !== 'text') {
-        window.AppBridge?.requestIcon(t.id, t.path || '');
+        window.AppBridge?.requestIcon(t.id, _iconSourceOf(t), t.icon_index || 0);
       }
     });
   }
@@ -647,11 +647,17 @@
 
   // ─── 图标异步加载 ─────────────────────────────────────────────────────────
 
+  /** 取工具的图标来源 (程序/DLL 模式用 icon_source, 否则用工具路径) */
+  function _iconSourceOf(tool) {
+    if (tool.icon_mode === 'program' && tool.icon_source) return tool.icon_source;
+    return tool.path || '';
+  }
+
   function _requestAllIcons() {
     if (!window.AppBridge) return;
     allTools.forEach(t => {
-      if (!t.icon_data || t.icon_mode === 'auto') {
-        window.AppBridge.requestIcon(t.id, t.path || '');
+      if (!t.icon_data || t.icon_mode === 'auto' || t.icon_mode === 'program') {
+        window.AppBridge.requestIcon(t.id, _iconSourceOf(t), t.icon_index || 0);
       }
     });
   }

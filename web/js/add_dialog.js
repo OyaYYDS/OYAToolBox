@@ -10,6 +10,8 @@ const AddDialog = (() => {
   let tags = [];
   let onSave = null;
   let previewIconCallback = null;
+  let programSource = '';   // 程序/DLL 图标模式来源文件
+  let programIndex = 0;     // 程序/DLL 图标模式索引
 
   // ─── 初始化 ─────────────────────────────────────────────────────────────
 
@@ -76,6 +78,10 @@ const AddDialog = (() => {
     document.getElementById('btn-browse-icon')
       ?.addEventListener('click', _browseIcon);
 
+    // 程序/DLL 图标提取
+    document.getElementById('btn-browse-program')
+      ?.addEventListener('click', _browseProgram);
+
     // 路径变化自动提取信息
     document.getElementById('tool-path')
       ?.addEventListener('blur', _onPathBlur);
@@ -121,6 +127,8 @@ const AddDialog = (() => {
     tags = Array.isArray(tool.tags) ? [...tool.tags] : [];
 
     _reset();
+    programSource = tool.icon_source || '';
+    programIndex = tool.icon_index || 0;
     _fillFromTool(tool);
     // 自动模式下图标不持久化, 编辑时重新提取预览
     if (iconMode === 'auto' && !currentIcon && tool.path) {
@@ -129,6 +137,16 @@ const AddDialog = (() => {
         _renderIconPreview(currentIcon, 'auto');
       };
       window.AppBridge?.requestIcon('_preview', tool.path);
+    }
+    // 程序/DLL 模式: 从来源文件重新提取预览
+    if (iconMode === 'program' && programSource) {
+      const info = document.getElementById('icon-program-info');
+      if (info) info.textContent = programSource + ' · 索引 ' + programIndex;
+      previewIconCallback = (iconData) => {
+        currentIcon = iconData;
+        _renderIconPreview(currentIcon, 'program');
+      };
+      window.AppBridge?.requestIcon('_preview', programSource, programIndex);
     }
     _show();
   }
@@ -159,6 +177,10 @@ const AddDialog = (() => {
     if (catSel && catSel.options.length > 0) catSel.selectedIndex = 0;
     document.getElementById('icon-text-val').value  = '';
     document.getElementById('icon-color-val').value = '#4a9eff';
+    programSource = '';
+    programIndex = 0;
+    const programInfo = document.getElementById('icon-program-info');
+    if (programInfo) programInfo.textContent = '';
     _renderIconPreview('', 'auto', '?', '#4a9eff');
     _setIconMode('auto');
     _renderTags();
@@ -215,6 +237,68 @@ const AddDialog = (() => {
     }
   }
 
+  async function _browseProgram() {
+    if (!window.AppBridge) return;
+    const path = await window.AppBridge.openFileDialog('file');
+    if (!path) return;
+    const listStr = await window.AppBridge.listFileIcons(path);
+    let icons = [];
+    try { icons = JSON.parse(listStr) || []; } catch (e) {}
+    if (!icons.length) {
+      window.App?.toast('该文件内没有可提取的图标', 'error');
+      return;
+    }
+    _showIconPicker(path, icons);
+  }
+
+  /** 图标选择器: 网格列出文件内所有图标, 点击选用 */
+  function _showIconPicker(source, icons) {
+    document.getElementById('icon-picker-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'icon-picker-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:500;background:var(--bg-overlay);' +
+      'display:flex;align-items:center;justify-content:center';
+    overlay.addEventListener('mousedown', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg-dialog);border:1px solid var(--border-normal);' +
+      'border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:16px;' +
+      'max-width:520px;max-height:70vh;overflow:auto';
+    box.innerHTML = '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">' +
+      '选择图标（共 ' + icons.length + ' 个）</div>';
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:8px';
+
+    icons.forEach(([idx, dataUri]) => {
+      const cell = document.createElement('div');
+      cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;' +
+        'cursor:pointer;padding:6px;border-radius:8px;border:1px solid transparent';
+      cell.innerHTML = '<img src="' + window.iconDataToSrc(dataUri) + '" width="40" height="40" ' +
+        'style="object-fit:contain;pointer-events:none">' +
+        '<span style="font-size:10px;color:var(--text-tertiary);pointer-events:none">#' + idx + '</span>';
+      cell.addEventListener('mouseenter', () => { cell.style.background = 'var(--bg-card-hover)'; });
+      cell.addEventListener('mouseleave', () => { cell.style.background = ''; });
+      cell.addEventListener('click', () => {
+        programSource = source;
+        programIndex = idx;
+        currentIcon = dataUri;
+        _renderIconPreview(currentIcon, 'program');
+        const info = document.getElementById('icon-program-info');
+        if (info) info.textContent = source + ' · 索引 ' + idx;
+        overlay.remove();
+      });
+      grid.appendChild(cell);
+    });
+
+    box.appendChild(grid);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  }
+
   async function _onPathBlur() {
     const path = document.getElementById('tool-path').value.trim();
     if (!path || mode === 'edit') return;
@@ -262,13 +346,15 @@ const AddDialog = (() => {
     });
 
     // 显示/隐藏相关输入组
-    const autoGroup  = document.getElementById('icon-auto-group');
-    const imageGroup = document.getElementById('icon-image-group');
-    const textGroup  = document.getElementById('icon-text-group');
+    const autoGroup    = document.getElementById('icon-auto-group');
+    const imageGroup   = document.getElementById('icon-image-group');
+    const programGroup = document.getElementById('icon-program-group');
+    const textGroup    = document.getElementById('icon-text-group');
 
-    if (autoGroup)  autoGroup.style.display  = m === 'auto'  ? ''     : 'none';
-    if (imageGroup) imageGroup.style.display = m === 'image' ? ''     : 'none';
-    if (textGroup)  textGroup.style.display  = m === 'text'  ? 'flex' : 'none';
+    if (autoGroup)    autoGroup.style.display    = m === 'auto'    ? ''     : 'none';
+    if (imageGroup)   imageGroup.style.display   = m === 'image'   ? ''     : 'none';
+    if (programGroup) programGroup.style.display = m === 'program' ? ''     : 'none';
+    if (textGroup)    textGroup.style.display    = m === 'text'    ? 'flex' : 'none';
 
     const name  = document.getElementById('tool-name')?.value || '?';
     const text  = document.getElementById('icon-text-val')?.value  || name.substring(0,2).toUpperCase();
@@ -366,8 +452,11 @@ const AddDialog = (() => {
       name, path, description: desc, args, work_dir: workDir,
       category, type, tags,
       icon_mode: iconMode,
-      // 自动图标不持久化 (每次启动从磁盘缓存重新提取), 仅自定义图片保存数据
+      // 自动图标不持久化 (每次启动从磁盘缓存重新提取), 仅自定义图片保存数据;
+      // 程序/DLL 模式保存来源文件与索引, 每次启动重新提取
       icon_data: iconMode === 'image' ? currentIcon : '',
+      icon_source: iconMode === 'program' ? programSource : '',
+      icon_index: iconMode === 'program' ? programIndex : 0,
       icon_text: iconText,
       icon_color: iconColor,
     };

@@ -122,6 +122,8 @@ class DataManager:
         tool.setdefault('order', len(self._tools))
         tool.setdefault('icon_mode', 'auto')
         tool.setdefault('icon_data', '')
+        tool.setdefault('icon_source', '')   # 程序/DLL 图标模式的来源文件
+        tool.setdefault('icon_index', 0)     # 程序/DLL 图标模式的图标索引
         tool.setdefault('icon_text', self._name_to_abbr(tool.get('name', '?')))
         tool.setdefault('icon_color', self._name_to_color(tool.get('name', '')))
         tool.setdefault('category', '常用')
