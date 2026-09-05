@@ -54,8 +54,15 @@ build_exe.bat
 
 ## 制作安装包（Inno Setup 6）
 
-1. 下载 [WebView2 Evergreen 引导程序](https://developer.microsoft.com/microsoft-edge/webview2/)，重命名为 `MicrosoftEdgeWebview2Setup.exe` 放到项目根目录
-2. 打开 [OYAToolBox.iss](OYAToolBox.iss) 编译即可（安装时会自动检测并安装 WebView2 Runtime）
+1. 安装 [Inno Setup 6](https://jrsoftware.org/isdl.php)（无管理员权限可用 `/PORTABLE=1` 便携安装）
+2. 下载 [WebView2 Evergreen 引导程序](https://developer.microsoft.com/microsoft-edge/webview2/)，重命名为 `MicrosoftEdgeWebview2Setup.exe` 放到项目根目录（仓库内已附带）
+3. 编译：`ISCC.exe OYAToolBox.iss`，输出 `dist\OYAToolBox-Setup.exe`（约 16 MB）
+
+安装行为：
+
+- 默认安装到 Program Files（安装时自动检测并按需安装 WebView2 Runtime）
+- **初始数据适配**：安装包会携带当前 `data/` 作为初始数据；安装到 Program Files 后程序首启自动把初始数据播种到 `%APPDATA%\OYAToolBox`（只读源文件、已有数据不覆盖）
+- 便携模式：把 `dist\OYAToolBox` 整个目录拷到任意可写位置运行即可，数据保存在 exe 同目录 `data/`
 
 ## 数据存储
 

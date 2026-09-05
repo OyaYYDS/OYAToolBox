@@ -55,7 +55,29 @@ class DataManager:
         self.settings_file = DATA_DIR / 'settings.json'
         self._tools: List[Dict] = []
         self._settings: Dict = {}
+        self._seed_from_bundled()
         self._load()
+
+    def _seed_from_bundled(self):
+        """安装版首启: 从安装目录 data/ 导入随包发布的数据
+
+        安装到 Program Files 时 exe 目录不可写, 实际数据在 %APPDATA%,
+        这里只读取安装目录的初始数据播种过去 (不修改原文件, 已有数据时不覆盖)。
+        """
+        if not getattr(sys, 'frozen', False):
+            return
+        try:
+            exe_dir = Path(sys.executable).resolve().parent
+            bundled = exe_dir / 'data'
+            if not bundled.is_dir() or bundled == DATA_DIR:
+                return
+            for name in ('tools.json', 'settings.json'):
+                src = bundled / name
+                dst = DATA_DIR / name
+                if src.exists() and not dst.exists():
+                    dst.write_text(src.read_text(encoding='utf-8'), encoding='utf-8')
+        except Exception:
+            pass
 
     def _load(self):
         if self.tools_file.exists():
